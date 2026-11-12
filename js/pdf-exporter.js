@@ -154,14 +154,14 @@
       return tf;
     }
 
-    function addCheckBox(page, name, checked, x, y, size, borderColor) {
+    function addCheckBox(page, name, checked, x, y, size, borderColor, checkColor) {
       const cb = form.createCheckBox(name);
       cb.addToPage(page, {
         x,
         y,
         width: size || 11,
         height: size || 11,
-        textColor: C.white,
+        textColor: checkColor || borderColor || C.white,
         backgroundColor: C.black,
         borderColor: borderColor || C.white,
         borderWidth: 1
@@ -214,71 +214,251 @@
     // 2. CONSTELAÇÃO CRANIANA DOS 5 ATRIBUTOS AO REDOR DA CAVEIRA
     // ========================================================================
     drawBookHeading(page1, "Atributos:", 28, 748, 10, C.white);
-    page1.drawText("5 PONTOS INICIAIS (MÍN 0, MÁX 5)", { x: 392, y: 749, size: 7, font: silkFont, color: C.acuidade });
+    page1.drawText("5 PONTOS INICIAIS NAS CAIXINHAS (MÍN 0, MÁX 5)", {
+      x: 344,
+      y: 749,
+      size: 6.8,
+      font: silkFont,
+      color: C.acuidade
+    });
+
+    const basePoints = (state && state.basePoints) || {};
+    const profBonuses = (state && state.profBonuses) || {};
+    const totals = (state && state.totals) || {};
+
+    function getBase(key) {
+      return Math.max(0, Math.min(5, Number(basePoints[key] ?? 0)));
+    }
+    function getProfMod(key) {
+      return Number(profBonuses[key] ?? 0);
+    }
+    function getTotal(key) {
+      if (totals[key] !== undefined) return Number(totals[key]);
+      return getBase(key) + getProfMod(key);
+    }
 
     // NÚCLEO CENTRAL: CAVEIRA DO LIMIAR+
-    const coreX = 227;
-    const coreY = 562;
-    const coreW = 140;
-    const coreH = 150;
+    const coreX = 232;
+    const coreY = 556;
+    const coreW = 131;
+    const coreH = 166;
     drawCornerNode(page1, coreX, coreY, coreW, coreH, C.white);
 
     if (skullImg) {
-      page1.drawImage(skullImg, { x: coreX + 18, y: coreY + 24, width: 104, height: 114 });
+      page1.drawImage(skullImg, { x: coreX + 13, y: coreY + 30, width: 105, height: 120 });
     }
-    page1.drawText("PERITO", { x: coreX + 52, y: coreY + 10, size: 7, font: silkFont, color: C.white });
+    page1.drawText("PERITO", { x: coreX + 47, y: coreY + 12, size: 7, font: silkFont, color: C.white });
 
     // Linhas de Circuito Ortogonais
-    page1.drawLine({ start: { x: 204, y: 676 }, end: { x: coreX, y: 676 }, thickness: 1, color: C.vigor });
-    page1.drawLine({ start: { x: coreX + coreW, y: 676 }, end: { x: 390, y: 676 }, thickness: 1, color: C.acuidade });
-    page1.drawLine({ start: { x: 204, y: 588 }, end: { x: coreX, y: 588 }, thickness: 1, color: C.esoterismo });
-    page1.drawLine({ start: { x: coreX + coreW, y: 588 }, end: { x: 390, y: 588 }, thickness: 1, color: C.psicometria });
-    page1.drawLine({ start: { x: 297, y: coreY }, end: { x: 297, y: 544 }, thickness: 1.2, color: C.razao });
+    page1.drawLine({ start: { x: 210, y: 696 }, end: { x: coreX, y: 696 }, thickness: 1, color: C.vigor });
+    page1.drawLine({ start: { x: coreX + coreW, y: 696 }, end: { x: 385, y: 696 }, thickness: 1, color: C.acuidade });
+    page1.drawLine({ start: { x: 210, y: 594 }, end: { x: coreX, y: 594 }, thickness: 1, color: C.esoterismo });
+    page1.drawLine({ start: { x: coreX + coreW, y: 594 }, end: { x: 385, y: 594 }, thickness: 1, color: C.psicometria });
+    page1.drawLine({ start: { x: 297, y: coreY }, end: { x: 297, y: 542 }, thickness: 1.2, color: C.razao });
 
-    function drawOrbitalAttrNode(attrKey, title, x, y, w, h, color, subNote) {
-      drawCornerNode(page1, x, y, w, h, color);
-      drawBookHeading(page1, title, x + 10, y + h - 22, 10.5, color);
-
-      const totVal = state.totals ? state.totals[attrKey] : 0;
-
-      addTextField(page1, `attr_${attrKey}_total`, formatSigned(totVal), x + w - 46, y + h - 30, 36, 22, {
-        fontSize: 12,
-        textColor: color,
-        borderColor: color
-      });
-
-      if (subNote) {
-        page1.drawText(subNote, { x: x + 10, y: y + 14, size: 6.5, font: silkFont, color: C.white });
+    function drawPipsRow(attrKey, baseVal, startX, yPos, pipSize, pipGap, color) {
+      for (let i = 1; i <= 5; i++) {
+        addCheckBox(
+          page1,
+          `attr_${attrKey}_pip_${i}`,
+          i <= baseVal,
+          startX + (i - 1) * pipGap,
+          yPos,
+          pipSize,
+          color,
+          color
+        );
       }
     }
 
-    drawOrbitalAttrNode("vigor", "* Vigor:", 28, 636, 176, 76, C.vigor, "CORPO, FORÇA, RESISTÊNCIA");
-    drawOrbitalAttrNode("acuidade", "* Acuidade:", 390, 636, 176, 76, C.acuidade, "PRECISÃO, REFLEXOS, ATENÇÃO");
-    drawOrbitalAttrNode("esoterismo", "* Esoterismo:", 28, 548, 176, 76, C.esoterismo, "AFINIDADE COM O INDIZÍVEL");
-    drawOrbitalAttrNode("psicometria", "* Psicometria:", 390, 548, 176, 76, C.psicometria, "");
+    function drawOrbitalAttrNode(attrKey, title, x, y, w, h, color, subNote) {
+      drawCornerNode(page1, x, y, w, h, color);
+      drawBookHeading(page1, title, x + 10, y + h - 15, 10, color);
 
-    const intTot = state.totals ? state.totals.inteligencia : 0;
-    const sapTot = state.totals ? state.totals.sapiencia : -3;
+      if (subNote) {
+        page1.drawText(subNote, { x: x + 10, y: y + h - 25, size: 5.8, font: silkFont, color: C.white });
+      }
 
-    addCheckBox(page1, "chk_psi_int", state.psiPrimary === "inteligencia", 398, 574, 9, C.psicometria);
-    page1.drawText("INTELIGÊNCIA:", { x: 412, y: 576, size: 6.5, font: silkFont, color: C.white });
-    addTextField(page1, "attr_inteligencia_total", formatSigned(intTot), 482, 572, 28, 14, { fontSize: 8.5 });
+      const baseVal = getBase(attrKey);
+      const profMod = getProfMod(attrKey);
+      const totVal = getTotal(attrKey);
+      const hasMod = profMod !== 0;
 
-    addCheckBox(page1, "chk_psi_sap", state.psiPrimary === "sapiencia", 398, 556, 9, C.psicometria);
-    page1.drawText("SAPIÊNCIA:", { x: 412, y: 558, size: 6.5, font: silkFont, color: C.white });
-    addTextField(page1, "attr_sapiencia_total", formatSigned(sapTot), 482, 554, 28, 14, { fontSize: 8.5 });
+      // 5 Caixinhas de Atributo (igual no site, editáveis no PDF, sem número de base)
+      drawPipsRow(attrKey, baseVal, x + 10, y + h - 44, 14, 19, color);
 
-    // * Razão na base do Crânio
-    drawCornerNode(page1, 160, 492, 275, 52, C.razao);
-    drawBookHeading(page1, "* Razão:", 172, 522, 10.5, C.razao);
-    page1.drawText("RESISTÊNCIA MENTAL", { x: 172, y: 502, size: 6.5, font: silkFont, color: C.white });
-    addTextField(page1, "attr_razao_total", formatSigned(state.totals ? state.totals.razao : 0), 388, 506, 36, 22, {
-      fontSize: 12,
-      textColor: C.razao,
-      borderColor: C.razao
+      // Divisor para a faixa inferior (Modificador de Profissão + Total Somado Maior)
+      page1.drawLine({
+        start: { x: x + 8, y: y + 34 },
+        end: { x: x + w - 8, y: y + 34 },
+        thickness: 0.6,
+        color: color
+      });
+
+      // Embaixo do atributo: Modificador de Profissão
+      page1.drawText(hasMod ? "MOD. PROFISSÃO:" : "MOD. PROF.:", {
+        x: x + 10,
+        y: y + 22,
+        size: 5.8,
+        font: hasMod ? silkBold : silkFont,
+        color: hasMod ? color : C.white
+      });
+      addTextField(page1, `attr_${attrKey}_prof_mod`, formatSigned(profMod), x + 10, y + 5, 42, 14, {
+        fontSize: 8.5,
+        textColor: hasMod ? color : C.white,
+        borderColor: hasMod ? color : C.white,
+        borderWidth: hasMod ? 1.1 : 0.6
+      });
+
+      // Valor Maior mostrando o Total Somado
+      page1.drawText("TOTAL:", {
+        x: x + w - 84,
+        y: y + 13,
+        size: 6.8,
+        font: silkBold,
+        color: color
+      });
+      addTextField(page1, `attr_${attrKey}_total`, formatSigned(totVal), x + w - 48, y + 5, 38, 25, {
+        fontSize: 14,
+        textColor: color,
+        borderColor: color,
+        borderWidth: 1.4
+      });
+    }
+
+    drawOrbitalAttrNode("vigor", "* Vigor:", 28, 650, 182, 84, C.vigor, "CORPO, FORÇA, RESISTÊNCIA");
+    drawOrbitalAttrNode("acuidade", "* Acuidade:", 385, 650, 182, 84, C.acuidade, "PRECISÃO, REFLEXOS, ATENÇÃO");
+    drawOrbitalAttrNode("esoterismo", "* Esoterismo:", 28, 548, 182, 92, C.esoterismo, "AFINIDADE COM O INDIZÍVEL");
+
+    // * Psicometria (5 caixinhas editáveis + Inteligência e Sapiência com Mod. Profissão embaixo e Total maior)
+    const psiX = 385;
+    const psiY = 548;
+    const psiW = 182;
+    const psiH = 92;
+    drawCornerNode(page1, psiX, psiY, psiW, psiH, C.psicometria);
+    drawBookHeading(page1, "* Psicometria:", psiX + 10, psiY + psiH - 14, 9.5, C.psicometria);
+
+    const psiBase = getBase("psicometria");
+    drawPipsRow("psicometria", psiBase, psiX + 10, psiY + psiH - 31, 12, 17, C.psicometria);
+    page1.drawText("MENTE / SOCIAL", {
+      x: psiX + 100,
+      y: psiY + psiH - 27,
+      size: 5.4,
+      font: silkFont,
+      color: C.white
     });
 
-    page1.drawLine({ start: { x: 24, y: 480 }, end: { x: 571, y: 480 }, thickness: 1, color: C.white });
+    page1.drawLine({
+      start: { x: psiX + 8, y: psiY + 56 },
+      end: { x: psiX + psiW - 8, y: psiY + 56 },
+      thickness: 0.6,
+      color: C.psicometria
+    });
+
+    const isIntPrimary = (state && state.psiPrimary) !== "sapiencia";
+    const intBase = isIntPrimary ? psiBase + getProfMod("psicometria") : -3;
+    const sapBase = !isIntPrimary ? psiBase + getProfMod("psicometria") : -3;
+    const intProf = getProfMod("inteligencia");
+    const sapProf = getProfMod("sapiencia");
+    const intTot = totals.inteligencia !== undefined ? Number(totals.inteligencia) : intBase + intProf;
+    const sapTot = totals.sapiencia !== undefined ? Number(totals.sapiencia) : sapBase + sapProf;
+
+    // Sub-bloco Inteligência
+    addCheckBox(page1, "chk_psi_int", isIntPrimary, psiX + 10, psiY + 42, 9, C.psicometria, C.psicometria);
+    page1.drawText("INTELIGÊNCIA", { x: psiX + 22, y: psiY + 44, size: 6.2, font: silkBold, color: C.white });
+    page1.drawText("MOD. PROF:", {
+      x: psiX + 22,
+      y: psiY + 32,
+      size: 5.2,
+      font: intProf !== 0 ? silkBold : silkFont,
+      color: intProf !== 0 ? C.acuidade : C.white
+    });
+    addTextField(page1, "attr_inteligencia_prof_mod", formatSigned(intProf), psiX + 66, psiY + 29, 26, 11, {
+      fontSize: 7.5,
+      textColor: intProf !== 0 ? C.acuidade : C.white,
+      borderColor: intProf !== 0 ? C.acuidade : C.psicometria,
+      borderWidth: intProf !== 0 ? 1 : 0.6
+    });
+    page1.drawText("TOTAL:", { x: psiX + 100, y: psiY + 36, size: 5.8, font: silkBold, color: C.white });
+    addTextField(page1, "attr_inteligencia_total", formatSigned(intTot), psiX + psiW - 44, psiY + 30, 36, 20, {
+      fontSize: 12,
+      textColor: C.white,
+      borderColor: C.psicometria,
+      borderWidth: 1.3
+    });
+
+    // Sub-bloco Sapiência
+    addCheckBox(page1, "chk_psi_sap", !isIntPrimary, psiX + 10, psiY + 15, 9, C.psicometria, C.psicometria);
+    page1.drawText("SAPIÊNCIA", { x: psiX + 22, y: psiY + 17, size: 6.2, font: silkBold, color: C.white });
+    page1.drawText("MOD. PROF:", {
+      x: psiX + 22,
+      y: psiY + 5,
+      size: 5.2,
+      font: sapProf !== 0 ? silkBold : silkFont,
+      color: sapProf !== 0 ? C.acuidade : C.white
+    });
+    addTextField(page1, "attr_sapiencia_prof_mod", formatSigned(sapProf), psiX + 66, psiY + 2, 26, 11, {
+      fontSize: 7.5,
+      textColor: sapProf !== 0 ? C.acuidade : C.white,
+      borderColor: sapProf !== 0 ? C.acuidade : C.psicometria,
+      borderWidth: sapProf !== 0 ? 1 : 0.6
+    });
+    page1.drawText("TOTAL:", { x: psiX + 100, y: psiY + 9, size: 5.8, font: silkBold, color: C.white });
+    addTextField(page1, "attr_sapiencia_total", formatSigned(sapTot), psiX + psiW - 44, psiY + 3, 36, 20, {
+      fontSize: 12,
+      textColor: C.white,
+      borderColor: C.psicometria,
+      borderWidth: 1.3
+    });
+
+    // * Razão na base do Crânio
+    const razX = 148;
+    const razY = 483;
+    const razW = 300;
+    const razH = 59;
+    const razBase = getBase("razao");
+    const razProf = getProfMod("razao");
+    const razTot = getTotal("razao");
+    const hasRazMod = razProf !== 0;
+
+    drawCornerNode(page1, razX, razY, razW, razH, C.razao);
+    drawBookHeading(page1, "* Razão:", razX + 10, razY + razH - 16, 10, C.razao);
+    page1.drawText("RESISTÊNCIA MENTAL", { x: razX + 82, y: razY + razH - 15, size: 5.8, font: silkFont, color: C.white });
+
+    // 5 Caixinhas editáveis de Razão
+    drawPipsRow("razao", razBase, razX + 10, razY + 23, 14, 19, C.razao);
+
+    // Embaixo das caixinhas de Razão: Modificador de Profissão
+    page1.drawText(hasRazMod ? "MOD. PROFISSÃO:" : "MOD. PROF.:", {
+      x: razX + 10,
+      y: razY + 9,
+      size: 5.8,
+      font: hasRazMod ? silkBold : silkFont,
+      color: hasRazMod ? C.razao : C.white
+    });
+    addTextField(page1, "attr_razao_prof_mod", formatSigned(razProf), razX + 86, razY + 5, 40, 14, {
+      fontSize: 8.5,
+      textColor: hasRazMod ? C.razao : C.white,
+      borderColor: hasRazMod ? C.razao : C.white,
+      borderWidth: hasRazMod ? 1.1 : 0.6
+    });
+
+    // Valor Maior mostrando o Total Somado de Razão
+    page1.drawText("TOTAL:", {
+      x: razX + razW - 92,
+      y: razY + 18,
+      size: 7.2,
+      font: silkBold,
+      color: C.razao
+    });
+    addTextField(page1, "attr_razao_total", formatSigned(razTot), razX + razW - 52, razY + 8, 42, 28, {
+      fontSize: 15,
+      textColor: C.razao,
+      borderColor: C.razao,
+      borderWidth: 1.4
+    });
+
+    page1.drawLine({ start: { x: 24, y: 478 }, end: { x: 571, y: 478 }, thickness: 1, color: C.white });
 
     // ========================================================================
     // 3. A CARNE (* VIDA) vs O ABISMO VERTICAL (* SANIDADE)

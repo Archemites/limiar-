@@ -139,6 +139,21 @@
     return Math.max(1, getTotalAttr("razao") + Number(state.sanRolled2d6 || 7) + getProfessionBonusFor("sanidadeMax"));
   }
 
+  function clampBasePoints() {
+    if (!state.basePoints || typeof state.basePoints !== "object") {
+      state.basePoints = { vigor: 0, acuidade: 0, psicometria: 0, esoterismo: 0, razao: 0 };
+    }
+    let spent = 0;
+    ATTRS.forEach((attr) => {
+      let v = Math.max(0, Math.min(5, Math.floor(Number(state.basePoints[attr] || 0))));
+      if (spent + v > 5) {
+        v = Math.max(0, 5 - spent);
+      }
+      state.basePoints[attr] = v;
+      spent += v;
+    });
+  }
+
   // ==========================================================================
   // NAVEGAÇÃO ENTRE AS 5 PÁGINAS (UMA PÁGINA POR ETAPA)
   // ==========================================================================
@@ -185,6 +200,7 @@
   }
 
   function renderStep1Attributes() {
+    clampBasePoints();
     const spent = ATTRS.reduce((acc, k) => acc + Number(state.basePoints[k] || 0), 0);
     const remaining = 5 - spent;
 
@@ -194,39 +210,88 @@
 
     if (badgeEl) {
       if (remaining === 0) {
-        badgeEl.textContent = "5 DE 5 PONTOS DISTRIBUÍDOS (PRONTO)";
+        badgeEl.textContent = "5 DE 5 PONTOS DISTRIBUÍDOS (MÁXIMO ATINGIDO)";
         badgeEl.style.borderColor = "#ffffff";
         badgeEl.style.color = "#ffffff";
-      } else if (remaining > 0) {
+      } else {
         badgeEl.textContent = `RESTAM ${remaining} PONTO(S) PARA DISTRIBUIR`;
         badgeEl.style.borderColor = "#ffff00";
         badgeEl.style.color = "#ffff00";
-      } else {
-        badgeEl.textContent = `VOCÊ DISTRIBUIU ${Math.abs(remaining)} PONTO(S) A MAIS`;
-        badgeEl.style.borderColor = "#ff0000";
-        badgeEl.style.color = "#ff0000";
       }
     }
 
     ATTRS.forEach((attr) => {
       const val = Number(state.basePoints[attr] || 0);
+      const profMod = getProfessionBonusFor(attr);
+      const totalVal = getTotalAttr(attr);
+      const otherSpent = spent - val;
+      const maxForAttr = Math.max(0, 5 - otherSpent);
       const valEl = document.getElementById(`p1-val-${attr}`);
       const pipsEl = document.getElementById(`p1-pips-${attr}`);
+      const modEl = document.getElementById(`p1-mod-${attr}`);
 
-      if (valEl) valEl.textContent = String(val);
+      if (valEl) valEl.textContent = formatSigned(totalVal);
+
+      if (modEl) {
+        const prof = getActiveProfession();
+        const profLabel = prof ? prof.name : "PROFISSÃO";
+        if (attr === "psicometria") {
+          const intMod = getProfessionBonusFor("inteligencia");
+          const sapMod = getProfessionBonusFor("sapiencia");
+          const subs = getPsicometriaSubs();
+          const modParts = [];
+          if (intMod !== 0) modParts.push(`${formatSigned(intMod)} INT`);
+          if (sapMod !== 0) modParts.push(`${formatSigned(sapMod)} SAP`);
+          modEl.innerHTML = `
+            <span style="opacity:0.85;">${modParts.length ? `MOD. ${escapeHtml(profLabel)}: <strong style="color:#ffff00;">${modParts.join(", ")}</strong>` : `BASE: ${val} PT(S)`}</span>
+            <span>INT <strong>${formatSigned(subs.inteligencia)}</strong> / SAP <strong>${formatSigned(subs.sapiencia)}</strong></span>
+          `;
+        } else if (profMod !== 0) {
+          modEl.innerHTML = `
+            <span>MOD. ${escapeHtml(profLabel)}: <strong style="color:var(--attr-color, #ffffff);">${formatSigned(profMod)}</strong></span>
+            <span>TOTAL: <strong style="font-size:0.95rem; color:var(--attr-color, #ffffff);">${formatSigned(totalVal)}</strong></span>
+          `;
+        } else {
+          modEl.innerHTML = `
+            <span style="opacity:0.65;">MOD. PROFISSÃO: +0</span>
+            <span>TOTAL: <strong style="font-size:0.9rem; color:var(--attr-color, #ffffff);">${formatSigned(totalVal)}</strong></span>
+          `;
+        }
+      }
 
       if (pipsEl) {
         pipsEl.innerHTML = "";
         for (let i = 1; i <= 5; i++) {
+          const isLocked = i > maxForAttr;
           const btn = document.createElement("button");
           btn.type = "button";
-          btn.className = "pip-btn" + (i <= val ? " is-active" : "");
+          btn.className = "pip-btn" + (i <= val ? " is-active" : "") + (isLocked ? " is-disabled" : "");
           btn.textContent = i <= val ? "■" : "□";
+          if (isLocked) {
+            btn.title = "Limite máximo de 5 pontos atingido";
+          }
           btn.addEventListener("click", (e) => {
             e.stopPropagation();
-            const cur = Number(state.basePoints[attr] || 0);
-            state.basePoints[attr] = cur === i ? i - 1 : i;
             state.focusedAttr = attr;
+            const cur = Number(state.basePoints[attr] || 0);
+            const others = ATTRS.reduce((acc, k) => acc + (k === attr ? 0 : Number(state.basePoints[k] || 0)), 0);
+            const maxAllowed = Math.max(0, 5 - others);
+            const desired = cur === i ? i - 1 : i;
+
+            if (desired > maxAllowed) {
+              if (window.LimiarSound) window.LimiarSound.blip(150, 0.06);
+              if (badgeEl) {
+                badgeEl.textContent = "LIMITE DE 5 PONTOS ATINGIDO!";
+                badgeEl.style.borderColor = "#ff0000";
+                badgeEl.style.color = "#ff0000";
+                badgeEl.classList.remove("pop-anim");
+                void badgeEl.offsetWidth;
+                badgeEl.classList.add("pop-anim");
+              }
+              return;
+            }
+
+            state.basePoints[attr] = desired;
             if (window.LimiarSound) window.LimiarSound.blip(300 + i * 70, 0.04);
             renderAll();
           });
@@ -284,9 +349,60 @@
     }
   }
 
+  function renderMiniAttrCardsHtml() {
+    const subs = getPsicometriaSubs();
+    const psiBase = Number(state.basePoints.psicometria || 0);
+    const intBase = state.psiPrimary === "inteligencia" ? psiBase : -3;
+    const sapBase = state.psiPrimary === "sapiencia" ? psiBase : -3;
+
+    function pipsStr(n) {
+      let s = "";
+      for (let i = 1; i <= 5; i++) s += i <= n ? "■" : "□";
+      return s;
+    }
+
+    function card(title, color, pipsText, modVal, totalVal) {
+      const hasMod = Number(modVal || 0) !== 0;
+      return `
+        <div style="border:1px solid ${color}; padding:5px 9px; display:flex; flex-direction:column; gap:2px; min-width:112px; background:#000000;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <span style="color:${color}; font-size:0.68rem;">${title}</span>
+            <strong style="color:${color}; font-size:1.05rem; line-height:1;">${formatSigned(totalVal)}</strong>
+          </div>
+          <div style="font-size:0.68rem; color:${color}; letter-spacing:1px;">${pipsText}</div>
+          ${
+            hasMod
+              ? `<div style="font-size:0.6rem; color:${color}; border-top:1px dotted ${color}; padding-top:2px;">PROF.: ${formatSigned(modVal)}</div>`
+              : `<div style="font-size:0.58rem; opacity:0.55;">SEM MOD. PROF.</div>`
+          }
+        </div>
+      `;
+    }
+
+    return [
+      card("* VIGOR", "#ff0000", pipsStr(state.basePoints.vigor), getProfessionBonusFor("vigor"), getTotalAttr("vigor")),
+      card("* ACUIDADE", "#ffff00", pipsStr(state.basePoints.acuidade), getProfessionBonusFor("acuidade"), getTotalAttr("acuidade")),
+      card(
+        "* INTELIGÊNCIA",
+        "#0000ff",
+        `PSI ${pipsStr(psiBase)} (${formatSigned(intBase)})`,
+        getProfessionBonusFor("inteligencia"),
+        subs.inteligencia
+      ),
+      card(
+        "* SAPIÊNCIA",
+        "#0000ff",
+        `PSI ${pipsStr(psiBase)} (${formatSigned(sapBase)})`,
+        getProfessionBonusFor("sapiencia"),
+        subs.sapiencia
+      ),
+      card("* ESOTERISMO", "#ff00ff", pipsStr(state.basePoints.esoterismo), getProfessionBonusFor("esoterismo"), getTotalAttr("esoterismo")),
+      card("* RAZÃO", "#f9cb9c", pipsStr(state.basePoints.razao), getProfessionBonusFor("razao"), getTotalAttr("razao"))
+    ].join("");
+  }
+
   function renderStep3Professions() {
     const prof = getActiveProfession();
-    const subs = getPsicometriaSubs();
 
     const nameEl = document.getElementById("p3-selected-prof-name");
     const bonusEl = document.getElementById("p3-selected-prof-bonus");
@@ -298,14 +414,7 @@
     if (prof && equipEl) equipEl.textContent = `EQUIPAMENTO INICIAL: ${prof.equipmentText || "Nenhum"}`;
 
     if (stripEl) {
-      stripEl.innerHTML = `
-        <span style="border:1px solid #ff0000; color:#ff0000; padding:3px 8px;">VIG ${formatSigned(getTotalAttr("vigor"))}</span>
-        <span style="border:1px solid #ffff00; color:#ffff00; padding:3px 8px;">ACU ${formatSigned(getTotalAttr("acuidade"))}</span>
-        <span style="border:1px solid #0000ff; color:#ffffff; padding:3px 8px;">INT ${formatSigned(subs.inteligencia)}</span>
-        <span style="border:1px solid #0000ff; color:#ffffff; padding:3px 8px;">SAP ${formatSigned(subs.sapiencia)}</span>
-        <span style="border:1px solid #ff00ff; color:#ff00ff; padding:3px 8px;">ESO ${formatSigned(getTotalAttr("esoterismo"))}</span>
-        <span style="border:1px solid #f9cb9c; color:#f9cb9c; padding:3px 8px;">RAZ ${formatSigned(getTotalAttr("razao"))}</span>
-      `;
+      stripEl.innerHTML = renderMiniAttrCardsHtml();
     }
 
     const gridEl = document.getElementById("p3-professions-grid");
@@ -406,23 +515,22 @@
     if (contInp && document.activeElement !== contInp) contInp.value = state.firstContact || "";
 
     const prof = getActiveProfession();
-    const subs = getPsicometriaSubs();
 
     if (sumBox) {
       sumBox.innerHTML = `
-        <div>
-          <span style="font-size:0.65rem; opacity:0.75;">FICHA PRONTA PARA EXPORTAÇÃO:</span>
-          <div style="font-size:1rem; color:#ffff00; font-weight:700;">${escapeHtml(state.name || "PERITO")} // ${escapeHtml(prof ? prof.name : "")}</div>
-          <div style="font-size:0.72rem; color:#f9cb9c; margin-top:2px;">EQUIPAMENTO INICIAL: <span style="color:#ffffff;">${escapeHtml(prof ? prof.equipmentText : "")}</span></div>
+        <div style="width:100%; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <div>
+            <span style="font-size:0.65rem; opacity:0.75;">FICHA PRONTA PARA EXPORTAÇÃO:</span>
+            <div style="font-size:1rem; color:#ffff00; font-weight:700;">${escapeHtml(state.name || "PERITO")} // ${escapeHtml(prof ? prof.name : "")}</div>
+            <div style="font-size:0.72rem; color:#f9cb9c; margin-top:2px;">EQUIPAMENTO INICIAL: <span style="color:#ffffff;">${escapeHtml(prof ? prof.equipmentText : "")}</span></div>
+          </div>
+          <div style="display:flex; gap:8px; font-size:0.74rem;">
+            <span style="border:1px solid #ff0000; background:#ff0000; color:#000000; padding:4px 10px; font-weight:700;">VIDA: ${getHpMax()}</span>
+            <span style="border:1px solid #f9cb9c; background:#f9cb9c; color:#000000; padding:4px 10px; font-weight:700;">SANIDADE: ${getSanMax()}</span>
+          </div>
         </div>
-        <div style="display:flex; flex-wrap:wrap; gap:8px; font-size:0.74rem;">
-          <span style="border:1px solid #ff0000; color:#ff0000; padding:3px 8px;">VIG ${formatSigned(getTotalAttr("vigor"))}</span>
-          <span style="border:1px solid #ffff00; color:#ffff00; padding:3px 8px;">ACU ${formatSigned(getTotalAttr("acuidade"))}</span>
-          <span style="border:1px solid #0000ff; color:#ffffff; padding:3px 8px;">PSI ${formatSigned(getTotalAttr("psicometria"))} (INT ${formatSigned(subs.inteligencia)} / SAP ${formatSigned(subs.sapiencia)})</span>
-          <span style="border:1px solid #ff00ff; color:#ff00ff; padding:3px 8px;">ESO ${formatSigned(getTotalAttr("esoterismo"))}</span>
-          <span style="border:1px solid #f9cb9c; color:#f9cb9c; padding:3px 8px;">RAZ ${formatSigned(getTotalAttr("razao"))}</span>
-          <span style="border:1px solid #ff0000; background:#ff0000; color:#000000; padding:3px 8px; font-weight:700;">VIDA: ${getHpMax()}</span>
-          <span style="border:1px solid #f9cb9c; background:#f9cb9c; color:#000000; padding:3px 8px; font-weight:700;">SANIDADE: ${getSanMax()}</span>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; width:100%;">
+          ${renderMiniAttrCardsHtml()}
         </div>
       `;
     }
@@ -507,7 +615,11 @@
           acuidade: getProfessionBonusFor("acuidade"),
           psicometria: getProfessionBonusFor("psicometria"),
           esoterismo: getProfessionBonusFor("esoterismo"),
-          razao: getProfessionBonusFor("razao")
+          razao: getProfessionBonusFor("razao"),
+          inteligencia: getProfessionBonusFor("inteligencia"),
+          sapiencia: getProfessionBonusFor("sapiencia"),
+          vidaMax: getProfessionBonusFor("vidaMax"),
+          sanidadeMax: getProfessionBonusFor("sanidadeMax")
         },
         avatarPngDataUrl: c5 ? c5.toDataURL("image/png") : null
       };
@@ -534,6 +646,7 @@
     } catch (e) {
       state = createDefaultState();
     }
+    clampBasePoints();
   }
 
   function escapeHtml(str) {

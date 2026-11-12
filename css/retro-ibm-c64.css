@@ -472,6 +472,23 @@ textarea {
   color: #000000;
 }
 
+.pip-btn.is-disabled {
+  opacity: 0.22;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.attr-node-mod {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dotted rgba(255, 255, 255, 0.35);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.68rem;
+  gap: 8px;
+}
+
 /* Painel Guia do Atributo em Foco */
 .attr-focus-guide {
   border: 1px solid #ffffff;
